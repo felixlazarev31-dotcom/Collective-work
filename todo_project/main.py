@@ -62,6 +62,7 @@ def login():
         if user and check_password_hash(user.password, password):
             session['user_id'] = user.id
             session['username'] = user.username
+            session.permanent = True  # Браузер запомнит вас, даже если закрыть вкладку
             return redirect(url_for('index'))
         else:
             flash('Неверное имя пользователя или пароль', 'danger')
@@ -131,6 +132,6 @@ def delete(todo_id):
 
 if __name__ == "__main__":
     with app.app_context():
-        db.drop_all()  # Пересоздаем таблицы для обновления структуры под пользователей
+          # Пересоздаем таблицы для обновления структуры под пользователей
         db.create_all()
     app.run(debug=True)
