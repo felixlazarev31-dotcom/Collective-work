@@ -86,12 +86,13 @@
                 <button class="chat-close-btn" id="closeChatBtn">&times;</button>
             </div>
 
-            <!-- Окно сообщений -->
+                        <!-- Окно сообщений -->
             <div id="chat-window" class="chat-popup-body">
                 {% for msg in chat_messages %}
                     <div class="chat-msg-box">
                         <strong style="color: #007bff;">{{ msg.user.username }}</strong>
-                        <small style="color: var(--text-muted); float: right;">{{ msg.timestamp.strftime('%H:%M') }}</small>
+                        <!-- ПОЧИНКА: Добавляем класс и атрибут даты, чтобы JavaScript сам выставил локальное время вашего ПК -->
+                        <small class="chat-time text-muted float-end" data-utc-time="{{ msg.timestamp.isoformat() }}"></small>
                         <div style="margin-top: 5px; word-break: break-all;">{{ msg.content }}</div>
                     </div>
                 {% else %}
@@ -114,6 +115,28 @@
 
     <!-- Интерактивные скрипты -->
     <script>
+                // Перевод времени сервера в точное локальное время вашего компьютера
+        document.querySelectorAll('.chat-time').forEach(el => {
+            const rawTime = el.getAttribute('data-utc-time');
+            if (rawTime) {
+                // Если в БД осталось время по Гринвичу, JavaScript добавит к нему +5 часов (или ваш часовой пояс) автоматически
+                const date = new Date(rawTime + 'Z');
+                if (!isNaN(date.getTime())) {
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    el.textContent = `${hours}:${minutes}`;
+                } else {
+                    // Если дата без часового пояса, выводим локальную как есть
+                    const plainDate = new Date(rawTime);
+                    const hours = String(plainDate.getHours()).padStart(2, '0');
+                    const minutes = String(plainDate.getMinutes()).padStart(2, '0');
+                    el.textContent = `${hours}:${minutes}`;
+                }
+            }
+        });
+
+
+
         // Логика открытия/закрытия окна чата
                 // Логика открытия/закрытия окна чата с сохранением состояния
         const chatPopup = document.getElementById('chatPopup');
