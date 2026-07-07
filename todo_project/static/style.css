@@ -412,3 +412,144 @@ body.dark-theme .todo-header h2 span {
     font-size: 18px;
     transition: background 0.3s;
 }
+
+/* Дополнительные стили для структуры и темной темы чата */
+.chat-msg-box {
+    transition: background-color 0.3s;
+}
+
+body.dark-theme .header-block,
+body.dark-theme .form-block,
+body.dark-theme .footer-block,
+body.dark-theme .empty-block,
+body.dark-theme .card {
+    background-color: #1e1e1e !important;
+    color: #f8f9fa !important;
+    border-color: #333333 !important;
+}
+
+body.dark-theme #chat-window {
+    background-color: #121212 !important;
+}
+
+body.dark-theme .chat-msg-box {
+    background-color: #252525 !important;
+    color: #f8f9fa !important;
+    border-color: #444444 !important;
+}
+
+/* --- СТИЛИ ДЛЯ ПЛАВАЮЩЕГО ВИДЖЕТА ЧАТА --- */
+.chat-widget-container {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 1000;
+    font-family: inherit;
+}
+
+/* Круглая кнопка вызова */
+.chat-trigger-btn {
+    width: 60px;
+    height: 60px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.chat-trigger-btn:hover {
+    transform: scale(1.1);
+    background: #0056b3;
+}
+
+/* Окно чата (по умолчанию скрыто) */
+.chat-popup {
+    display: none;
+    width: 350px;
+    height: 450px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    flex-direction: column;
+    overflow: hidden;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+}
+
+/* Класс для отображения через JS */
+.chat-popup.show {
+    display: flex;
+}
+
+/* Шапка чата */
+.chat-popup-header {
+    background: #007bff;
+    color: white;
+    padding: 12px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+}
+
+.chat-close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+/* Тело чата с сообщениями */
+.chat-popup-body {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-form);
+}
+
+.chat-popup-body .chat-msg-box {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+/* Подвал чата с формой ввода */
+.chat-popup-footer {
+    background: var(--bg-body);
+    border-top: 1px solid var(--border-color);
+    padding: 10px;
+}
+
+.chat-popup-footer input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-primary);
+}
+
+.chat-popup-footer button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
