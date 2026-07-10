@@ -4,15 +4,112 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ToDo</title>
-    <!-- Подключение вашего файла стилей -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Дополнительные стили для статистики */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: var(--bg-form);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 10px;
+        }
+
+        .stat-card .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            display: block;
+        }
+
+        body.dark-theme .stat-card .stat-number {
+            color: #4a9eff;
+        }
+
+        .stat-card .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .stat-card .stat-progress {
+            font-size: 22px;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .leaderboard-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: var(--bg-form);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .leaderboard-section h4 {
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-light);
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+
+        .leaderboard-item .rank {
+            font-weight: bold;
+            color: var(--text-muted);
+            min-width: 30px;
+        }
+
+        .leaderboard-item .username {
+            flex: 1;
+            color: var(--text-primary);
+            min-width: 80px;
+        }
+
+        .leaderboard-item .user-stats {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .leaderboard-item.current-user {
+            background: rgba(0, 123, 255, 0.1);
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        body.dark-theme .leaderboard-item.current-user {
+            background: rgba(74, 158, 255, 0.15);
+        }
+
+        .leaderboard-item .medal {
+            font-size: 20px;
+        }
+    </style>
 </head>
 <body class="todo-page">
 
-    <!-- Контейнер всего приложения (теперь на всю ширину под задачи) -->
-    <div class="todo-container" style="max-width: 900px; margin: 0 auto; width: 100%;">
+    <div class="todo-container" style="max-width: 1100px; margin: 0 auto; width: 100%;">
 
-        <!-- Шапка сайта по вашему CSS -->
+        <!-- Шапка -->
         <div class="todo-header">
             <h2>Привет, <span>{{ username }}</span>! 👋</h2>
             <div>
@@ -21,44 +118,95 @@
             </div>
         </div>
 
-        <!-- Список задач занимает центральную область -->
+        <!-- СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ -->
+        {% set my_stats = all_users_stats|selectattr('is_current_user', 'equalto', true)|first %}
+        {% if my_stats %}
+        <div class="stats-container">
+            <div class="stat-card">
+                <span class="stat-number">{{ my_stats.total_tasks }}</span>
+                <span class="stat-label">📋 Всего задач</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" style="color: #28a745;">{{ my_stats.completed_tasks }}</span>
+                <span class="stat-label">✅ Выполнено</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-progress">{{ my_stats.completion_rate }}%</span>
+                <span class="stat-label">📊 Прогресс</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" style="color: #ffc107;">{{ my_stats.today_tasks }}</span>
+                <span class="stat-label">📅 На сегодня</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" style="color: #17a2b8;">{{ my_stats.completed_today }}</span>
+                <span class="stat-label">✅ Выполнено сегодня</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Рейтинг пользователей -->
+        <div class="leaderboard-section">
+            <h4>🏆 Рейтинг пользователей по выполненным задачам</h4>
+            {% for user_stat in all_users_stats %}
+            <div class="leaderboard-item {% if user_stat.is_current_user %}current-user{% endif %}">
+                <span class="rank">
+                    {% if user_stat.rank == 1 %}🥇
+                    {% elif user_stat.rank == 2 %}🥈
+                    {% elif user_stat.rank == 3 %}🥉
+                    {% else %}#{{ user_stat.rank }}
+                    {% endif %}
+                </span>
+                <span class="username">
+                    {{ user_stat.username }}
+                    {% if user_stat.is_current_user %} (Вы){% endif %}
+                </span>
+                <span class="user-stats">
+                    ✅ {{ user_stat.completed_tasks }} выполнено
+                    {% if user_stat.total_tasks > 0 %}
+                    ({{ user_stat.completion_rate }}%)
+                    {% endif %}
+                    {% if user_stat.today_tasks > 0 %}
+                    • 📅 Сегодня: {{ user_stat.completed_today }}/{{ user_stat.today_tasks }}
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Список задач -->
         <div class="todo-section">
             <h3 style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">📝 Мои задачи</h3>
 
-            <!-- Форма добавления по вашему CSS -->
             <form action="/add" method="POST" class="add-form">
                 <input type="text" name="title" placeholder="Что нужно сделать?" required>
-
                 <select name="category">
                     <option value="Общее">📁 Общее</option>
                     <option value="Учеба">📚 Учеба</option>
                     <option value="Работа">💼 Работа</option>
                     <option value="Личное">🏠 Личное</option>
                 </select>
-
                 <input type="date" name="due_date">
-
                 <button type="submit" class="btn-add">➕</button>
             </form>
 
-            <!-- Список задач по вашему CSS -->
             <div class="todo-list" style="margin-top: 20px;">
                 {% for todo in todo_list %}
                 <div class="todo-item">
                     <div class="todo-info">
                         <span class="category">{{ todo.category }}</span>
-
                         {% if todo.complete %}
                             <span class="title done">{{ todo.title }}</span>
                         {% else %}
                             <span class="title">{{ todo.title }}</span>
                         {% endif %}
-
                         {% if todo.due_date %}
                             <span class="due-date">📅 До: {{ todo.due_date.strftime('%d.%m.%Y') }}</span>
                         {% endif %}
+                        {% if todo.completed_at %}
+                            <span class="due-date" style="color: #28a745;">✅ Выполнено</span>
+                        {% endif %}
                     </div>
-
                     <div class="todo-actions">
                         {% if todo.complete %}
                             <a href="/complete/{{ todo.id }}" class="btn-complete undo">↩ Вернуть</a>
@@ -77,21 +225,17 @@
         </div>
     </div>
 
-    <!-- ВСПЛЫВАЮЩИЙ КОМАНДНЫЙ ЧАТ (Виджет в углу экрана) -->
+    <!-- ЧАТ -->
     <div class="chat-widget-container">
-        <!-- Само окно чата (по умолчанию скрыто классами в CSS) -->
         <div class="chat-popup" id="chatPopup">
             <div class="chat-popup-header">
                 <span>💬 Командный чат</span>
                 <button class="chat-close-btn" id="closeChatBtn">&times;</button>
             </div>
-
-                        <!-- Окно сообщений -->
             <div id="chat-window" class="chat-popup-body">
                 {% for msg in chat_messages %}
                     <div class="chat-msg-box">
                         <strong style="color: #007bff;">{{ msg.user.username }}</strong>
-                        <!-- ПОЧИНКА: Добавляем класс и атрибут даты, чтобы JavaScript сам выставил локальное время вашего ПК -->
                         <small class="chat-time text-muted float-end" data-utc-time="{{ msg.timestamp.isoformat() }}"></small>
                         <div style="margin-top: 5px; word-break: break-all;">{{ msg.content }}</div>
                     </div>
@@ -99,8 +243,6 @@
                     <p style="color: var(--text-muted); text-align: center; margin: auto;">В чате пока нет сообщений. 😊</p>
                 {% endfor %}
             </div>
-
-            <!-- Форма отправки сообщения -->
             <div class="chat-popup-footer">
                 <form action="/send_message" method="POST" style="display: flex; gap: 8px;">
                     <input type="text" name="message_content" placeholder="Напишите сообщение..." required autocomplete="off">
@@ -108,25 +250,20 @@
                 </form>
             </div>
         </div>
-
-        <!-- Круглая плавающая кнопка для открытия чата -->
         <button class="chat-trigger-btn" id="openChatBtn">💬</button>
     </div>
 
-    <!-- Интерактивные скрипты -->
     <script>
-                // Перевод времени сервера в точное локальное время вашего компьютера
+        // Перевод времени
         document.querySelectorAll('.chat-time').forEach(el => {
             const rawTime = el.getAttribute('data-utc-time');
             if (rawTime) {
-                // Если в БД осталось время по Гринвичу, JavaScript добавит к нему +5 часов (или ваш часовой пояс) автоматически
                 const date = new Date(rawTime + 'Z');
                 if (!isNaN(date.getTime())) {
                     const hours = String(date.getHours()).padStart(2, '0');
                     const minutes = String(date.getMinutes()).padStart(2, '0');
                     el.textContent = `${hours}:${minutes}`;
                 } else {
-                    // Если дата без часового пояса, выводим локальную как есть
                     const plainDate = new Date(rawTime);
                     const hours = String(plainDate.getHours()).padStart(2, '0');
                     const minutes = String(plainDate.getMinutes()).padStart(2, '0');
@@ -135,57 +272,34 @@
             }
         });
 
-
-
-        // Логика открытия/закрытия окна чата
-                // Логика открытия/закрытия окна чата с сохранением состояния
+        // Чат
         const chatPopup = document.getElementById('chatPopup');
         const openChatBtn = document.getElementById('openChatBtn');
         const closeChatBtn = document.getElementById('closeChatBtn');
         const chatWindow = document.getElementById('chat-window');
 
-        // Проверяем при загрузке страницы, был ли чат открыт ранее
         if (localStorage.getItem('chat_open') === 'true') {
             chatPopup.classList.add('show');
             openChatBtn.style.display = 'none';
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
-        // Открыть чат
         openChatBtn.addEventListener('click', () => {
             chatPopup.classList.add('show');
             openChatBtn.style.display = 'none';
-            localStorage.setItem('chat_open', 'true'); // Запоминаем, что открыли
+            localStorage.setItem('chat_open', 'true');
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         });
 
-        // Закрыть чат
         closeChatBtn.addEventListener('click', () => {
             chatPopup.classList.remove('show');
             openChatBtn.style.display = 'flex';
-            localStorage.setItem('chat_open', 'false'); // Запоминаем, что закрыли
+            localStorage.setItem('chat_open', 'false');
         });
 
-        // Автопрокрутка сообщений вниз
         if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
 
-        // Открыть чат
-        openChatBtn.addEventListener('click', () => {
-            chatPopup.classList.add('show');
-            openChatBtn.style.display = 'none'; // Скрываем круглую кнопку при открытии окна
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-        });
-
-        // Закрыть чат
-        closeChatBtn.addEventListener('click', () => {
-            chatPopup.classList.remove('show');
-            openChatBtn.style.display = 'flex'; // Возвращаем круглую кнопку
-        });
-
-        // Автопрокрутка вниз при загрузке, если чат открыт
-        if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-
-        // Переключение темной/светлой темы
+        // Тема
         const toggleBtn = document.getElementById('theme-toggle');
         if (localStorage.getItem('theme') === 'dark') {
             document.body.classList.add('dark-theme');
@@ -207,4 +321,3 @@
     </script>
 </body>
 </html>
-
