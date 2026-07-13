@@ -103,6 +103,64 @@
         .leaderboard-item .medal {
             font-size: 20px;
         }
+
+        /* Стили для сетевого чата */
+        .chat-section {
+            margin-top: 30px;
+            padding: 15px;
+            background: var(--bg-form);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .chat-window {
+            height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border-light);
+            padding: 10px;
+            border-radius: 5px;
+            background: var(--bg-main);
+            margin-bottom: 10px;
+        }
+
+        .chat-message {
+            margin-bottom: 8px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.02);
+            word-break: break-word;
+        }
+
+        body.dark-theme .chat-message {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .chat-form-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-form-container input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background: var(--bg-main);
+            color: var(--text-primary);
+        }
+
+        .btn-send {
+            padding: 8px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn-send:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 <body class="todo-page">
@@ -173,7 +231,6 @@
             </div>
             {% endfor %}
         </div>
-
         <!-- Список задач -->
         <div class="todo-section">
             <h3 style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">📝 Мои задачи</h3>
@@ -223,101 +280,97 @@
                 {% endfor %}
             </div>
         </div>
-    </div>
 
-    <!-- ЧАТ -->
-    <div class="chat-widget-container">
-        <div class="chat-popup" id="chatPopup">
-            <div class="chat-popup-header">
-                <span>💬 Командный чат</span>
-                <button class="chat-close-btn" id="closeChatBtn">&times;</button>
-            </div>
-            <div id="chat-window" class="chat-popup-body">
+        <!-- СЕТЕВОЙ ОНЛАЙН ЧАТ -->
+        <div class="chat-section">
+            <h3 style="margin-bottom: 15px;">💬 Общекомандный чат (Онлайн)</h3>
+            <div class="chat-window" id="chat-window">
                 {% for msg in chat_messages %}
-                    <div class="chat-msg-box">
-                        <strong style="color: #007bff;">{{ msg.user.username }}</strong>
-                        <small class="chat-time text-muted float-end" data-utc-time="{{ msg.timestamp.isoformat() }}"></small>
-                        <div style="margin-top: 5px; word-break: break-all;">{{ msg.content }}</div>
-                    </div>
-                {% else %}
-                    <p style="color: var(--text-muted); text-align: center; margin: auto;">В чате пока нет сообщений. 😊</p>
+                <div class="chat-message">
+                    <strong>{{ msg.user.username }}</strong>
+                    <span style="font-size: 11px; color: gray;">[{{ msg.timestamp.strftime('%H:%M') }}]</span>:
+                    <span>{{ msg.content }}</span>
+                </div>
                 {% endfor %}
             </div>
-            <div class="chat-popup-footer">
-                <form action="/send_message" method="POST" style="display: flex; gap: 8px;">
-                    <input type="text" name="message_content" placeholder="Напишите сообщение..." required autocomplete="off">
-                    <button type="submit">Отправить</button>
-                </form>
-            </div>
+            <form id="chat-form" class="chat-form-container">
+                <input type="text" id="message-input" placeholder="Введите сообщение..." autocomplete="off" required>
+                <button type="submit" class="btn-send">Отправить</button>
+            </form>
         </div>
-        <button class="chat-trigger-btn" id="openChatBtn">💬</button>
     </div>
 
+    <script src="https://socketio.org"></script>
     <script>
-        // Перевод времени
-        document.querySelectorAll('.chat-time').forEach(el => {
-            const rawTime = el.getAttribute('data-utc-time');
-            if (rawTime) {
-                const date = new Date(rawTime + 'Z');
-                if (!isNaN(date.getTime())) {
-                    const hours = String(date.getHours()).padStart(2, '0');
-                    const minutes = String(date.getMinutes()).padStart(2, '0');
-                    el.textContent = `${hours}:${minutes}`;
-                } else {
-                    const plainDate = new Date(rawTime);
-                    const hours = String(plainDate.getHours()).padStart(2, '0');
-                    const minutes = String(plainDate.getMinutes()).padStart(2, '0');
-                    el.textContent = `${hours}:${minutes}`;
-                }
+        // 1. ЛОГИКА ТЕМНОЙ ТЕМЫ
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-theme');
+            if (document.body.classList.contains('dark-theme')) {
+                localStorage.setItem('theme', 'dark');
+                themeToggle.textContent = '☀️ Светлая тема';
+            } else {
+                localStorage.setItem('theme', 'light');
+                themeToggle.textContent = '🌙 Темная тема';
+            }
+        });
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-theme');
+            themeToggle.textContent = '☀️ Светлая тема';
+        }
+
+        // 2. РАБОТА СЕТЕВОГО ЧАТА ЧЕРЕЗ ВЕБ-СОКЕТЫ
+        const socket = io();
+        const chatWindow = document.getElementById('chat-window');
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        document.getElementById('chat-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            if (input.value.trim() !== "") {
+                socket.emit('send_message', {'message': input.value});
+                input.value = '';
             }
         });
 
-        // Чат
-        const chatPopup = document.getElementById('chatPopup');
-        const openChatBtn = document.getElementById('openChatBtn');
-        const closeChatBtn = document.getElementById('closeChatBtn');
-        const chatWindow = document.getElementById('chat-window');
-
-        if (localStorage.getItem('chat_open') === 'true') {
-            chatPopup.classList.add('show');
-            openChatBtn.style.display = 'none';
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-        }
-
-        openChatBtn.addEventListener('click', () => {
-            chatPopup.classList.add('show');
-            openChatBtn.style.display = 'none';
-            localStorage.setItem('chat_open', 'true');
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        socket.on('render_message', function(data) {
+            const msgHtml = `
+                <div class="chat-message">
+                    <strong>${data.username}</strong>
+                    <span style="font-size: 11px; color: gray;">[${data.timestamp}]</span>:
+                    <span>${data.content}</span>
+                </div>`;
+            chatWindow.insertAdjacentHTML('beforeend', msgHtml);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
         });
 
-        closeChatBtn.addEventListener('click', () => {
-            chatPopup.classList.remove('show');
-            openChatBtn.style.display = 'flex';
-            localStorage.setItem('chat_open', 'false');
-        });
-
-        if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-
-        // Тема
-        const toggleBtn = document.getElementById('theme-toggle');
-        if (localStorage.getItem('theme') === 'dark') {
-            document.body.classList.add('dark-theme');
-            if (toggleBtn) toggleBtn.textContent = '☀️ Светлая тема';
+        // 3. СИСТЕМНЫЕ КРОССПЛАТФОРМЕННЫЕ УВЕДОМЛЕНИЯ (WINDOWS & ANDROID)
+        if ("Notification" in window) {
+            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
         }
 
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                document.body.classList.toggle('dark-theme');
-                if (document.body.classList.contains('dark-theme')) {
-                    localStorage.setItem('theme', 'dark');
-                    toggleBtn.textContent = '☀️ Светлая тема';
-                } else {
-                    localStorage.setItem('theme', 'light');
-                    toggleBtn.textContent = '🌙 Темная тема';
-                }
-            });
+        function checkOverdueTasks() {
+            if ("Notification" in window && Notification.permission === "granted") {
+                fetch('/api/overdue_tasks')
+                    .then(response => response.json())
+                    .then(tasks => {
+                        if (tasks && tasks.length > 0) {
+                            new Notification("Напоминание ToDo", {
+                                body: `У вас обнаружено ${tasks.length} невыполненных актуальных задач. Пора за работу!`,
+                                icon: "https://flaticon.com"
+                            });
+                        }
+                    })
+                    .catch(err => console.log("Ошибка проверки уведомлений:", err));
+            }
         }
+
+        // Автоматическая проверка задач каждые 10 минут
+        setInterval(checkOverdueTasks, 600000);
+        // Первичный запуск через 4 секунды после захода на страницу
+        setTimeout(checkOverdueTasks, 4000);
     </script>
 </body>
 </html>

@@ -1,17 +1,22 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+import os
+from datetime import datetime, date
+from flask import Flask, render_template, redirect, url_for, request, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
+app.config['SECRET_KEY'] = 'your_super_secret_key_here'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///todo.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'super-secret-key-for-todo-app'
 
 db = SQLAlchemy(app)
+# Инициализируем SocketIO для сетевого чата
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
-# Модель Пользователя
+# --- МОДЕЛИ ДАННЫХ ---
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
@@ -20,7 +25,6 @@ class User(db.Model):
     messages = db.relationship('Message', backref='user', lazy=True)
 
 
-# Модель Задачи
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -32,7 +36,6 @@ class Todo(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 
-# Модель Сообщений
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
@@ -40,7 +43,39 @@ class Message(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 
-# --- АВТОРИЗАЦИЯ И РЕГИСТРАЦИЯ ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
+def get_all_users_stats():
+    today = date.today()
+    users = User.query.all()
+    stats = []
+    for user in users:
+        total_tasks = Todo.query.filter_by(user_id=user.id).count()
+        completed_tasks = Todo.query.filter_by(user_id=user.id, complete=True).count()
+        today_tasks = Todo.query.filter_by(user_id=user.id, complete=False).filter(Todo.due_date == today).count()
+
+        completed_today = Todo.query.filter_by(user_id=user.id, complete=True).filter(
+            Todo.completed_at >= datetime(today.year, today.month, today.day)
+        ).count()
+
+        completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+
+        stats.append({
+            'username': user.username,
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'completion_rate': round(completion_rate, 1),
+            'today_tasks': today_tasks,
+            'completed_today': completed_today,
+            'is_current_user': user.id == session.get('user_id')
+        })
+    stats.sort(key=lambda x: x['completed_tasks'], reverse=True)
+    for i, stat in enumerate(stats, 1):
+        stat['rank'] = i
+    return stats
+
+
+# --- МАРШРУТЫ АВТОРИЗАЦИИ ---
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -51,7 +86,8 @@ def register():
         if user_exists:
             flash('Пользователь с таким именем уже существует!', 'danger')
             return redirect(url_for('register'))
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+
+        hashed_password = generate_password_hash(password)
         new_user = User(username=username, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
@@ -81,7 +117,7 @@ def logout():
     return redirect(url_for('login'))
 
 
-# --- МАРШРУТЫ СПИСКА ДЕЛ ---
+# --- МАРШРУТЫ ПРИЛОЖЕНИЯ ---
 
 @app.route('/')
 def index():
@@ -91,59 +127,13 @@ def index():
     todo_list = Todo.query.filter_by(user_id=session['user_id']).order_by(Todo.complete.asc(),
                                                                           Todo.due_date.asc()).all()
     chat_messages = Message.query.order_by(Message.timestamp.asc()).all()[-50:]
-
-    # Получаем статистику всех пользователей
     all_users_stats = get_all_users_stats()
 
     return render_template('index.html',
                            todo_list=todo_list,
-                           username=session['username'],
+                           username=session.get('username'),
                            chat_messages=chat_messages,
                            all_users_stats=all_users_stats)
-
-
-def get_all_users_stats():
-    """Получает статистику для всех пользователей"""
-    today = date.today()
-    users = User.query.all()
-    stats = []
-
-    for user in users:
-        # Все задачи пользователя
-        total_tasks = Todo.query.filter_by(user_id=user.id).count()
-        completed_tasks = Todo.query.filter_by(user_id=user.id, complete=True).count()
-
-        # Задачи на сегодня (срок выполнения сегодня)
-        today_tasks = Todo.query.filter_by(user_id=user.id, complete=False).filter(
-            Todo.due_date == today
-        ).count()
-
-        # Выполнено сегодня
-        completed_today = Todo.query.filter_by(user_id=user.id, complete=True).filter(
-            Todo.completed_at >= datetime(today.year, today.month, today.day)
-        ).count()
-
-        # Процент выполнения
-        completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-
-        stats.append({
-            'username': user.username,
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'completion_rate': round(completion_rate, 1),
-            'today_tasks': today_tasks,
-            'completed_today': completed_today,
-            'is_current_user': user.id == session.get('user_id')
-        })
-
-    # Сортируем по количеству выполненных задач
-    stats.sort(key=lambda x: x['completed_tasks'], reverse=True)
-
-    # Добавляем место в рейтинге
-    for i, stat in enumerate(stats, 1):
-        stat['rank'] = i
-
-    return stats
 
 
 @app.route('/add', methods=['POST'])
@@ -156,15 +146,9 @@ def add():
     due_date = None
     if date_str:
         due_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
     if title:
-        new_todo = Todo(
-            title=title,
-            complete=False,
-            category=category,
-            due_date=due_date,
-            user_id=session['user_id'],
-            created_at=datetime.utcnow()
-        )
+        new_todo = Todo(title=title, complete=False, category=category, due_date=due_date, user_id=session['user_id'])
         db.session.add(new_todo)
         db.session.commit()
     return redirect(url_for('index'))
@@ -177,10 +161,7 @@ def complete(todo_id):
     todo = Todo.query.get_or_404(todo_id)
     if todo.user_id == session['user_id']:
         todo.complete = not todo.complete
-        if todo.complete:
-            todo.completed_at = datetime.utcnow()
-        else:
-            todo.completed_at = None
+        todo.completed_at = datetime.utcnow() if todo.complete else None
         db.session.commit()
     return redirect(url_for('index'))
 
@@ -196,21 +177,17 @@ def delete(todo_id):
     return redirect(url_for('index'))
 
 
-# --- МАРШРУТЫ ДЛЯ ЧАТА ---
-
-@app.route('/send_message', methods=['POST'])
-def send_message():
+# API для получения просроченных/невыполненных задач (для уведомлений)
+@app.route('/api/overdue_tasks')
+def overdue_tasks():
     if 'user_id' not in session:
-        return redirect(url_for('login'))
-    content = request.form.get('message_content')
-    if content and content.strip():
-        new_msg = Message(content=content.strip(), user_id=session['user_id'])
-        db.session.add(new_msg)
-        db.session.commit()
-    return redirect(url_for('index'))
+        return jsonify({'error': 'Unauthorized'}), 401
+    today = date.today()
+    # Ищем невыполненные задачи, у которых срок выполнения сегодня или уже прошёл
+    tasks = Todo.query.filter_by(user_id=session['user_id'], complete=False).filter(Todo.due_date <= today).all()
+    return jsonify([{'id': t.id, 'title': t.title, 'due_date': str(t.due_date)} for t in tasks])
 
 
-# --- API ДЛЯ СТАТИСТИКИ ---
 @app.route('/api/stats')
 def api_stats():
     if 'user_id' not in session:
@@ -218,7 +195,33 @@ def api_stats():
     return jsonify(get_all_users_stats())
 
 
-if __name__ == "__main__":
+# --- ОБРАБОТЧИК СЕТЕВОГО ЧАТА (WebSocket) ---
+
+@socketio.on('send_message')
+def handle_message(data):
+    # Метод получает данные без перезагрузки страницы и транслирует их всем
+    user_id = session.get('user_id')
+    username = session.get('username')
+    if not user_id:
+        return False
+
+    content = data.get('message', '').strip()
+    if content:
+        new_msg = Message(content=content, user_id=user_id)
+        db.session.add(new_msg)
+        db.session.commit()
+
+        # Рассылаем сообщение абсолютно всем подключенным пользователям сети
+        emit('render_message', {
+            'username': username,
+            'content': content,
+            'timestamp': datetime.utcnow().strftime('%H:%M')
+        }, broadcast=True)
+
+
+if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    # Запуск через socketio вместо app.run для поддержки веб-сокетов
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+
