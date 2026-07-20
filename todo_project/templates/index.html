@@ -280,24 +280,6 @@
                 {% endfor %}
             </div>
         </div>
-
-        <!-- СЕТЕВОЙ ОНЛАЙН ЧАТ -->
-        <div class="chat-section">
-            <h3 style="margin-bottom: 15px;">💬 Общекомандный чат (Онлайн)</h3>
-            <div class="chat-window" id="chat-window">
-                {% for msg in chat_messages %}
-                <div class="chat-message">
-                    <strong>{{ msg.user.username }}</strong>
-                    <span style="font-size: 11px; color: gray;">[{{ msg.timestamp.strftime('%H:%M') }}]</span>:
-                    <span>{{ msg.content }}</span>
-                </div>
-                {% endfor %}
-            </div>
-            <form id="chat-form" class="chat-form-container">
-                <input type="text" id="message-input" placeholder="Введите сообщение..." autocomplete="off" required>
-                <button type="submit" class="btn-send">Отправить</button>
-            </form>
-        </div>
     </div>
 
     <script src="https://socketio.org"></script>
@@ -318,33 +300,7 @@
             document.body.classList.add('dark-theme');
             themeToggle.textContent = '☀️ Светлая тема';
         }
-
-        // 2. РАБОТА СЕТЕВОГО ЧАТА ЧЕРЕЗ ВЕБ-СОКЕТЫ
-        const socket = io();
-        const chatWindow = document.getElementById('chat-window');
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-
-        document.getElementById('chat-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const input = document.getElementById('message-input');
-            if (input.value.trim() !== "") {
-                socket.emit('send_message', {'message': input.value});
-                input.value = '';
-            }
-        });
-
-        socket.on('render_message', function(data) {
-            const msgHtml = `
-                <div class="chat-message">
-                    <strong>${data.username}</strong>
-                    <span style="font-size: 11px; color: gray;">[${data.timestamp}]</span>:
-                    <span>${data.content}</span>
-                </div>`;
-            chatWindow.insertAdjacentHTML('beforeend', msgHtml);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-        });
-
-        // 3. СИСТЕМНЫЕ КРОССПЛАТФОРМЕННЫЕ УВЕДОМЛЕНИЯ (WINDOWS & ANDROID)
+        // 2. СИСТЕМНЫЕ КРОССПЛАТФОРМЕННЫЕ УВЕДОМЛЕНИЯ (WINDOWS & ANDROID)
         if ("Notification" in window) {
             if (Notification.permission !== "granted" && Notification.permission !== "denied") {
                 Notification.requestPermission();
